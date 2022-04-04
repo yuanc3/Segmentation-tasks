@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from torchvision.models.utils import load_state_dict_from_url
+# from torchvision.models.utils import load_state_dict_from_url
+
 
 class VGG(nn.Module):
     def __init__(self, features, num_classes=1000):
@@ -8,24 +9,24 @@ class VGG(nn.Module):
         self.features = features # 主干特征提取网络（利用vgg实现）
 
         # 以下无关
-        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        self.classifier = nn.Sequential(
-            nn.Linear(512 * 7 * 7, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, 4096),
-            nn.ReLU(True),
-            nn.Dropout(),
-            nn.Linear(4096, num_classes),
-        )
-        self._initialize_weights()
+        # self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(512 * 7 * 7, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, 4096),
+        #     nn.ReLU(True),
+        #     nn.Dropout(),
+        #     nn.Linear(4096, num_classes),
+        # )
+        # self._initialize_weights()
 
     def forward(self, x):
         x = self.features(x)
         # 以下无关
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        # x = self.avgpool(x)
+        # x = torch.flatten(x, 1)
+        # x = self.classifier(x)
         return x
 
     def _initialize_weights(self):
@@ -64,10 +65,10 @@ cfgs = {
 
 def lef_unet(pretrained, in_channels, **kwargs):
     model = VGG(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
-    if pretrained:
-        state_dict = load_state_dict_from_url("https://download.pytorch.org/models/vgg16-397923af.pth", model_dir="./model_data")
-        model.load_state_dict(state_dict)
+    # if pretrained:
+    #     state_dict = load_state_dict_from_url("https://download.pytorch.org/models/vgg16-397923af.pth", model_dir="./model_data")
+    #     model.load_state_dict(state_dict)
     
-    del model.avgpool
-    del model.classifier
+    # del model.avgpool
+    # del model.classifier
     return model

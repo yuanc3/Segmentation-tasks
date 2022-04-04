@@ -9,6 +9,8 @@ from PIL import Image
 from torch import nn
 
 from nets.unet import Unet as unet
+from nets.attU_net import AttU_Net
+from utils.metrics import f_score
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #--------------------------------------------#
@@ -19,17 +21,18 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #--------------------------------------------#
 class Unet(object):
     _defaults = {
-        "model_path"        : 'logs\Best_Model_State.pth',
-        "model_image_size"  : (512, 512, 3),
-        "num_classes"       : 2,
+        "model_path"        : 'Best_Model_State_Mymodel.pth',
+        "model_image_size"  : (256, 256, 3),
+        "num_classes"       : 3,
         "cuda"              : True if torch.cuda.is_available() else False,
         #--------------------------------#
         #   blend参数用于控制是否
         #   让识别结果和原图混合
         #--------------------------------#
-        "blend"             : False
+        "blend"             : True
     }
-
+    # datasets/Testing/1702_412.jpg
+    # datasets/Training/1501_115.jpg
     #---------------------------------------------------#
     #   初始化UNET
     #---------------------------------------------------#
@@ -41,8 +44,14 @@ class Unet(object):
     #   获得所有的分类
     #---------------------------------------------------#
     def generate(self):
-        self.net = unet(num_classes=self.num_classes, in_channels=self.model_image_size[-1]).eval()
-
+        # from nets.UNet import UNet
+        # self.net = UNet(3,3).eval()
+        # self.net = unet(num_classes=self.num_classes, in_channels=self.model_image_size[-1]).eval()
+        import Config as config
+        from nets.nets.LSUnetMix import LSUnetMix
+        config_ = config.get_config()
+        self.net = LSUnetMix(config_,img_size=256,n_channels=3,n_classes=3).eval()
+        # self.net = AttU_Net(3,self.num_classes)
         state_dict = torch.load(self.model_path)
         self.net.load_state_dict(state_dict)
 
@@ -53,7 +62,7 @@ class Unet(object):
         print('{} model loaded.'.format(self.model_path))
 
         if self.num_classes <= 21:
-            self.colors = [(0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0), (0, 0, 128), (128, 0, 128), (0, 128, 128), 
+            self.colors = [(0, 0, 0), (0, 128, 0), (128, 0, 0), (0, 0, 128), (0, 0, 128), (128, 0, 128), (0, 128, 128), 
                     (128, 128, 128), (64, 0, 0), (192, 0, 0), (64, 128, 0), (192, 128, 0), (64, 0, 128), (192, 0, 128), 
                     (64, 128, 128), (192, 128, 128), (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128), (128, 64, 12)]
         else:
@@ -84,6 +93,7 @@ class Unet(object):
         #---------------------------------------------------------#
         #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
         #---------------------------------------------------------#
+        
         image = image.convert('RGB')
         
         #---------------------------------------------------#
@@ -91,18 +101,19 @@ class Unet(object):
         #---------------------------------------------------#
         old_img = copy.deepcopy(image)
         old_img =old_img.convert('RGB')
-        orininal_h = np.array(image).shape[0]
-        orininal_w = np.array(image).shape[1]
+        # orininal_h = np.array(image).shape[0]
+        # orininal_w = np.array(image).shape[1]
 
-        #---------------------------------------------------#
-        #   进行不失真的resize，添加灰条，进行图像归一化
-        #---------------------------------------------------#
-        image, nw, nh = self.letterbox_image(image,(self.model_image_size[1],self.model_image_size[0]))
-
+        # #---------------------------------------------------#
+        # #   进行不失真的resize，添加灰条，进行图像归一化
+        # #---------------------------------------------------#
+        # image, nw, nh = self.letterbox_image(image,(self.model_image_size[1],self.model_image_size[0]))
+        box = (125, 125, 381, 381)
+        image = image.crop(box)
         images = [np.array(image)/255]
         # 调整通道
         images = np.transpose(images,(0,3,1,2))
-
+        
         #---------------------------------------------------#
         #   图片传入网络进行预测
         #---------------------------------------------------#
@@ -111,29 +122,40 @@ class Unet(object):
             
             images =images.to(device)
 
-            pr = self.net(images)[0]
+
+            pr = self.net(images)
+            
+            pad = nn.ZeroPad2d(padding=(125, 131, 125, 131))
+            pr=pad(pr)
+            pr=pr[0]
+            
             #---------------------------------------------------#
             #   取出每一个像素点的种类
             #---------------------------------------------------#
+    
             pr = F.softmax(pr.permute(1,2,0),dim = -1).cpu().numpy().argmax(axis=-1)
             #--------------------------------------#
             #   将灰条部分截取掉
             #--------------------------------------#
-            pr = pr[int((self.model_image_size[0]-nh)//2):int((self.model_image_size[0]-nh)//2+nh), int((self.model_image_size[1]-nw)//2):int((self.model_image_size[1]-nw)//2+nw)]
+            # pr = pr[int((self.model_image_size[0]-nh)//2):int((self.model_image_size[0]-nh)//2+nh), int((self.model_image_size[1]-nw)//2):int((self.model_image_size[1]-nw)//2+nw)]
 
         #------------------------------------------------#
         #   创建一副新图，并根据每个像素点的种类赋予颜色
         #------------------------------------------------#
         seg_img = np.zeros((np.shape(pr)[0],np.shape(pr)[1],3))
         for c in range(self.num_classes):
-            seg_img[:,:,0] += ((pr[:,: ] == 1 )*( 255 )).astype('uint8')
-            seg_img[:,:,1] += ((pr[:,: ] == c )*( self.colors[c][1] )).astype('uint8')
-            seg_img[:,:,2] += ((pr[:,: ] == c )*( self.colors[c][2] )).astype('uint8')
+            # seg_img[:,:,0] += ((pr[:,: ] == 1 )*( 255 )).astype('uint8')
+            # # seg_img[:,:,0] += ((pr[:,: ] == c )*( self.colors[c][0] )).astype('uint8')
+            # seg_img[:,:,1] += ((pr[:,: ] == c )*( self.colors[c][1] )).astype('uint8')
+            # seg_img[:,:,2] += ((pr[:,: ] == c )*( self.colors[c][2] )).astype('uint8')
+            seg_img[pr[:,: ] == c,0] =self.colors[c][0]
+            seg_img[pr[:,: ] == c,1] =self.colors[c][1]
+            seg_img[pr[:,: ] == c,2] =self.colors[c][2]
 
         #------------------------------------------------#
         #   将新图片转换成Image的形式
         #------------------------------------------------#
-        image = Image.fromarray(np.uint8(seg_img)).resize((orininal_w,orininal_h))
+        image = Image.fromarray(np.uint8(seg_img)).resize((512,512))
         #------------------------------------------------#
         #   将新图片和原图片混合
         #------------------------------------------------#

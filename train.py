@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from nets.unet import Unet
+from nets.attU_net import AttU_Net
 from nets.unet_training import CE_Loss, Dice_loss, LossHistory
 from utils.dataloader import DeeplabDataset, deeplab_dataset_collate
 from utils.metrics import f_score
@@ -20,7 +21,7 @@ def get_lr(optimizer):
 
 
 def fit_one_epoch(net, epoch, epoch_size, epoch_size_val, gen, genval, Epoch,
-                  cuda):
+                  cuda,min_loss):
     net = net.train()
     total_loss = 0
     total_f_score = 0
@@ -29,7 +30,7 @@ def fit_one_epoch(net, epoch, epoch_size, epoch_size_val, gen, genval, Epoch,
     val_total_f_score = 0
     start_time = time.time()
     
-    min_loss = 100000000
+    
     with tqdm(total=epoch_size,
               desc=f'Epoch {epoch + 1}/{Epoch}',
               postfix=dict,
@@ -44,12 +45,16 @@ def fit_one_epoch(net, epoch, epoch_size, epoch_size_val, gen, genval, Epoch,
                 pngs = torch.from_numpy(pngs).type(torch.FloatTensor).long()
                 labels = torch.from_numpy(labels).type(torch.FloatTensor)
                 if cuda:
-                    imgs = imgs.cuda()
-                    pngs = pngs.cuda()
-                    labels = labels.cuda()
+                    imgs = imgs.to(device)
+                    pngs = pngs.to(device)
+                    labels = labels.to(device)
 
             optimizer.zero_grad()
+            
+	        
+            # torch.cuda.empty_cache()
             outputs = net(imgs)
+            
             loss = CE_Loss(outputs, pngs, num_classes=NUM_CLASSES)
             if dice_loss:
                 main_dice = Dice_loss(outputs, labels)
@@ -93,9 +98,9 @@ def fit_one_epoch(net, epoch, epoch_size, epoch_size_val, gen, genval, Epoch,
                 pngs = torch.from_numpy(pngs).type(torch.FloatTensor).long()
                 labels = torch.from_numpy(labels).type(torch.FloatTensor)
                 if cuda:
-                    imgs = imgs.cuda()
-                    pngs = pngs.cuda()
-                    labels = labels.cuda()
+                    imgs = imgs.to(device)
+                    pngs = pngs.to(device)
+                    labels = labels.to(device)
 
                 outputs = net(imgs)
                 val_loss = CE_Loss(outputs, pngs, num_classes=NUM_CLASSES)
@@ -128,10 +133,24 @@ def fit_one_epoch(net, epoch, epoch_size, epoch_size_val, gen, genval, Epoch,
 
     # print('Saving state, iter:', str(epoch + 1))
     # torch.save(model.state_dict(), 'logs/Epoch%d-Total_Loss%.4f-Val_Loss%.4f.pth'%((epoch+1),total_loss/(epoch_size+1),val_toal_loss/(epoch_size_val+1)))
-    if val_toal_loss / (epoch_size_val + 1) < min_loss:
-        torch.save(model, 'logs/Best_Model.pth')
-        torch.save(model.state_dict(), 'logs/Best_Model_State.pth')
+    # if val_toal_loss / (epoch_size_val + 1) < min_loss:
+    #     min_loss=val_toal_loss / (epoch_size_val + 1)
+    #     torch.save(model, 'logs/Best_Model_AttUnet.pth')
+    #     torch.save(model.state_dict(), 'logs/Best_Model_State_AttUnet.pth')
+    #     print("Model saved!")
+    if val_total_f_score / (iteration + 1) > min_loss:
+        min_loss=val_total_f_score / (iteration + 1)
+        # torch.save(model, 'logs/Best_Model_test.pth')
+        torch.save(model.state_dict(), 'Best_Model_State_256.pth')
+        # torch.save(pretrained_dict, "Best_Model_State_AttUnet.pth3__", _use_new_zipfile_serialization=False)
         print("Model saved!")
+        file = open("2.txt",'w')
+        file.write(str(min_loss))
+    # import gc
+    # gc.collect()
+    # torch.cuda.empty_cache()
+    return min_loss
+
 
 
 if __name__ == "__main__":
@@ -139,12 +158,12 @@ if __name__ == "__main__":
     #------------------------------#
     #   输入图片的大小
     #------------------------------#
-    inputs_size = [512, 512, 3]
+    inputs_size = [256, 256, 3]
     #---------------------#
     #   分类个数+1
     #   2+1
-    #---------------------#
-    NUM_CLASSES = 2
+    #---------------------#s
+    NUM_CLASSES = 3
     #--------------------------------------------------------------------#
     #   建议选项：
     #   种类少（几类）时，设置为True
@@ -155,7 +174,7 @@ if __name__ == "__main__":
     #-------------------------------#
     #   主干网络预训练权重的使用
     #-------------------------------#
-    pretrained = True
+    pretrained = False
     #-------------------------------#
     #   Cuda的使用
     #-------------------------------#
@@ -163,23 +182,39 @@ if __name__ == "__main__":
     #------------------------------#
     #   数据集路径
     #------------------------------#
-    dataset_path = "VOCdevkit/VOC2007/"
 
+    
+    dataset_path = "datasets"
+    with open('2.txt','r') as f:
+        min_loss = float( f.read())
+    # min_loss =0
+    0.854
+    0.2086
+    # from nets.UCTransNet import UCTransNet
+    # # from nets.LSTransNetMix import UCTransNet
+
+    # from nets.Config import get_CTranS_config
+    # config_vit = get_CTranS_config()
+    # model = UCTransNet(config_vit, n_channels=3, n_classes=3,img_size=512)
+    # model = AttU_Net(img_ch=3, output_ch=NUM_CLASSES).train()
     model = Unet(num_classes=NUM_CLASSES,
                  in_channels=inputs_size[-1],
-                 pretrained=pretrained).train()
-
+                 pretrained=False).train()
     loss_history = LossHistory("logs/")
     #-------------------------------------------#
     #   权值文件的下载请看README
     #   权值和主干特征提取网络一定要对应
     #-------------------------------------------#
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if not pretrained:
-        model_path = r"model_data/unet_voc.pth"
+        model_path = r"Best_Model_State_256.pth"
         print('Loading weights into state dict...')
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        
+        # CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python train.py
         model_dict = model.state_dict()
         pretrained_dict = torch.load(model_path, map_location=device)
+        
         pretrained_dict = {
             k: v
             for k, v in pretrained_dict.items()
@@ -189,20 +224,14 @@ if __name__ == "__main__":
         model.load_state_dict(model_dict)
         print('Finished!')
 
+
     if Cuda:
         net = torch.nn.DataParallel(model)
         cudnn.benchmark = True
-        net = net.cuda()
+        net = net.to(device)
 
-    # 打开数据集的txt
-    with open(os.path.join(dataset_path, "ImageSets/Segmentation/train.txt"),
-              "r") as f:
-        train_lines = f.readlines()
-
-    # 打开数据集的txt
-    with open(os.path.join(dataset_path, "ImageSets/Segmentation/val.txt"),
-              "r") as f:
-        val_lines = f.readlines()
+    train_lines =os.listdir(os.path.join(dataset_path, "Training"))
+    val_lines =os.listdir(os.path.join(dataset_path, "Testing"))
 
     #------------------------------------------------------#
     #   主干特征提取网络特征通用，冻结训练可以加快训练速度
@@ -213,7 +242,7 @@ if __name__ == "__main__":
     #   提示OOM或者显存不足请调小Batch_size
     #------------------------------------------------------#
     if True:
-        lr = 1e-4
+        lr = 0.00000001
         Init_Epoch = 0
         Interval_Epoch = 50
         Batch_size = 4
@@ -223,9 +252,9 @@ if __name__ == "__main__":
                                                  step_size=1,
                                                  gamma=0.92)
 
-        train_dataset = DeeplabDataset(train_lines, inputs_size, NUM_CLASSES,
+        train_dataset = DeeplabDataset(True,train_lines, inputs_size, NUM_CLASSES,
                                        True, dataset_path)
-        val_dataset = DeeplabDataset(val_lines, inputs_size, NUM_CLASSES,
+        val_dataset = DeeplabDataset(False,val_lines, inputs_size, NUM_CLASSES,
                                      False, dataset_path)
         gen = DataLoader(train_dataset,
                          batch_size=Batch_size,
@@ -246,28 +275,29 @@ if __name__ == "__main__":
         if epoch_size == 0 or epoch_size_val == 0:
             raise ValueError("数据集过小，无法进行训练，请扩充数据集。")
 
-        for param in model.left_part.parameters():
-            param.requires_grad = False
+        # for param in model.parameters():
+        #     param.requires_grad = False
 
         for epoch in range(Init_Epoch, Interval_Epoch):
-            fit_one_epoch(model, epoch, epoch_size, epoch_size_val, gen,
-                          gen_val, Interval_Epoch, Cuda)
+            min_loss=fit_one_epoch(model, epoch, epoch_size, epoch_size_val, gen,
+                          gen_val, Interval_Epoch, Cuda,min_loss)
             lr_scheduler.step()
+            
 
     if True:
-        lr = 1e-5
+        lr = 1e-7
         Interval_Epoch = 50
         Epoch = 100
-        Batch_size = 4
+        Batch_size = 2
 
         optimizer = optim.Adam(model.parameters(), lr)
         lr_scheduler = optim.lr_scheduler.StepLR(optimizer,
                                                  step_size=1,
                                                  gamma=0.92)
 
-        train_dataset = DeeplabDataset(train_lines, inputs_size, NUM_CLASSES,
+        train_dataset = DeeplabDataset(True,train_lines, inputs_size, NUM_CLASSES,
                                        True, dataset_path)
-        val_dataset = DeeplabDataset(val_lines, inputs_size, NUM_CLASSES,
+        val_dataset = DeeplabDataset(False,val_lines, inputs_size, NUM_CLASSES,
                                      False, dataset_path)
         gen = DataLoader(train_dataset,
                          batch_size=Batch_size,
@@ -288,10 +318,10 @@ if __name__ == "__main__":
         if epoch_size == 0 or epoch_size_val == 0:
             raise ValueError("数据集过小，无法进行训练，请扩充数据集。")
 
-        for param in model.left_part.parameters():
-            param.requires_grad = True
+        # for param in model.parameters():
+        #     param.requires_grad = True
 
         for epoch in range(Interval_Epoch, Epoch):
-            fit_one_epoch(model, epoch, epoch_size, epoch_size_val, gen,
-                          gen_val, Epoch, Cuda)
+            min_loss=fit_one_epoch(model, epoch, epoch_size, epoch_size_val, gen,
+                          gen_val, Epoch, Cuda,min_loss)
             lr_scheduler.step()

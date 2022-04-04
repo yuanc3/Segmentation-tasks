@@ -18,7 +18,7 @@ class unetUp(nn.Module):
 
 
 class Unet(nn.Module):
-    def __init__(self, num_classes=2, in_channels=3, pretrained=False):
+    def __init__(self, num_classes=3, in_channels=3, pretrained=False):
         super(Unet, self).__init__()
         self.left_part = lef_unet(pretrained=pretrained,
                                   in_channels=in_channels)
@@ -43,7 +43,6 @@ class Unet(nn.Module):
         feat3 = self.left_part.features[9:16](feat2)
         feat4 = self.left_part.features[16:23](feat3)
         feat5 = self.left_part.features[23:-1](feat4)
-
         up4 = self.up_concat4(feat4, feat5)
         up3 = self.up_concat3(feat3, up4)
         up2 = self.up_concat2(feat2, up3)

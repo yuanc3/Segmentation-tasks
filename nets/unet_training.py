@@ -32,9 +32,9 @@ def Dice_loss(inputs, target, beta=1, smooth = 1e-5):
     #--------------------------------------------#
     #   计算dice loss
     #--------------------------------------------#
-    tp = torch.sum(temp_target[...,:-1] * temp_inputs, axis=[0,1])
+    tp = torch.sum(temp_target * temp_inputs, axis=[0,1])
     fp = torch.sum(temp_inputs                       , axis=[0,1]) - tp
-    fn = torch.sum(temp_target[...,:-1]              , axis=[0,1]) - tp
+    fn = torch.sum(temp_target              , axis=[0,1]) - tp
 
     score = ((1 + beta ** 2) * tp + smooth) / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + smooth)
     dice_loss = 1 - torch.mean(score)

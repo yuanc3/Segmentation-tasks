@@ -32,9 +32,9 @@ def rand(a=0, b=1):
     return np.random.rand()*(b-a) + a
 
 class DeeplabDataset(Dataset):
-    def __init__(self,train_lines,image_size,num_classes,random_data,dataset_path):
+    def __init__(self,train,train_lines,image_size,num_classes,random_data,dataset_path):
         super(DeeplabDataset, self).__init__()
-
+        self.train = train
         self.train_lines    = train_lines
         self.train_batches  = len(train_lines)
         self.image_size     = image_size
@@ -107,12 +107,20 @@ class DeeplabDataset(Dataset):
             shuffle(self.train_lines)
             
         annotation_line = self.train_lines[index]
-        name = annotation_line.split()[0]
+        # name = annotation_line.split()[0]
 
         # 从文件中读取图像
         ''''''''''''''''''''''''''''''''''''
-        jpg = Image.open(os.path.join(os.path.join(self.dataset_path, "JPEGImages"), name + ".jpg"))
-        png = Image.open(os.path.join(os.path.join(self.dataset_path, "SegmentationClass"), name + ".png"))
+        if self.train:
+            jpg = Image.open(os.path.join(self.dataset_path, "Training", annotation_line))
+            png = Image.open(os.path.join(self.dataset_path, "Training-L", annotation_line))
+        else:
+            jpg = Image.open(os.path.join(self.dataset_path, "Testing", annotation_line))
+            png = Image.open(os.path.join(self.dataset_path, "Testing-L", annotation_line))
+
+        box = (125, 125, 381, 381)
+        jpg = jpg.crop(box) 
+        png = png.crop(box) 
 
         if self.random_data:
             jpg, png = self.get_random_data(jpg,png,(int(self.image_size[1]),int(self.image_size[0])))
@@ -121,7 +129,9 @@ class DeeplabDataset(Dataset):
 
         png = np.array(png)
         # png[png >= self.num_classes] = self.num_classes
-        png[png == 255] = 1
+        png[png <= 10] = 0
+        png[png >= 200] = 1
+        png[png >100]=2
         #-------------------------------------------------------#
         #   转化成one_hot的形式
         #   在这里需要+1是因为voc数据集有些标签具有白边部分
@@ -129,8 +139,8 @@ class DeeplabDataset(Dataset):
         #-------------------------------------------------------#
         # seg_labels = np.eye(self.num_classes)[png.reshape([-1])]
         # seg_labels = seg_labels.reshape((int(self.image_size[1]),int(self.image_size[0]),self.num_classes))
-        seg_labels = np.eye(self.num_classes+1)[png.reshape([-1])]
-        seg_labels = seg_labels.reshape((int(self.image_size[1]),int(self.image_size[0]),self.num_classes+1))
+        seg_labels = np.eye(self.num_classes)[png.reshape(-1)]
+        seg_labels = seg_labels.reshape((int(self.image_size[1]),int(self.image_size[0]),self.num_classes))
 
         jpg = np.transpose(np.array(jpg),[2,0,1])/255
 

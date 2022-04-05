@@ -3,36 +3,6 @@ from PIL import Image
 import numpy as np
 from tqdm import tqdm
 from utils.metrics import f_score
-# file_path='datasets//Testing-L'
-# files = os.listdir(file_path)
-# mini=512
-# minj=512
-# maxi=0
-# maxj=0
-# print(len(files))
-# with tqdm(total=len(files),postfix=dict,mininterval=0.3) as pbar:
-#     for fi in files:
-#         fi_d = os.path.join(file_path, fi)
-#         img=Image.open(fi_d)
-#         img=np.array(img)
-#         for i in range(len(img)):
-#             for j in range(len(img[0])):
-#                 if(img[i][j]!=0):
-#                     mini=min(mini,i)
-#                     maxi=max(maxi,i)
-#                     minj=min(minj,j)
-#                     maxj=max(maxj,j)
-#         pbar.set_postfix(
-#             **{
-#                 'mini': mini,
-#                 'maxi': maxi,
-#                 'minj': minj,
-#                 'maxj': maxj
-#             })
-#         pbar.update(1)
-
-# print(mini,maxi,minj,maxj)
-
 import torch
 from torch import nn
 import torch.nn.functional as F

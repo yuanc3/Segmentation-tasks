@@ -9,13 +9,13 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from unet import Unet
+from showResult import ShowResult
 
 if __name__ == "__main__":
     #-------------------------------------------------------------------------#
     #   如果想要修改对应种类的颜色，到generate函数里修改self.colors即可
     #-------------------------------------------------------------------------#
-    unet = Unet()
+    show = ShowResult()
     #-------------------------------------------------------------------------#
     #   mode用于指定测试的模式：
     #   'predict'表示单张图片预测
@@ -56,7 +56,7 @@ if __name__ == "__main__":
                 print('Open Error! Try again!')
                 continue
             else:
-                r_image = unet.detect_image(image)
+                r_image = show.detect_image(image)
                 # cv2.imshow("1",r_image)
                 r_image.show()
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
             # 转变成Image
             frame = Image.fromarray(np.uint8(frame))
             # 进行检测
-            frame = np.array(unet.detect_image(frame))
+            frame = np.array(show.detect_image(frame))
             # RGBtoBGR满足opencv显示格式
             frame = cv2.cvtColor(frame,cv2.COLOR_RGB2BGR)
             
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     elif mode == "fps":
         test_interval = 100
         img = Image.open('img/street.jpg')
-        tact_time = unet.get_FPS(img, test_interval)
+        tact_time = show.get_FPS(img, test_interval)
         print(str(tact_time) + ' seconds, ' + str(1/tact_time) + 'FPS, @batch_size 1')
     else:
         raise AssertionError("Please specify the correct mode: 'predict', 'video' or 'fps'.")
